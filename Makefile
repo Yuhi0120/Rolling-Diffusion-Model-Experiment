@@ -24,20 +24,15 @@ ENVVARS      ?= -e TFDS_DATA_DIR=/data/tfds -w /app
 
 
 .PHONY: tfds
+TFDS_NAME ?= bair_robot_pushing_small
 tfds:
 	@mkdir -p "$(TFDS_DIR)"
-	docker run --rm -it \
-		-v "$(TFDS_DIR)":/data/tfds \
-		tensorflow/tensorflow:2.17.0 \
-		bash -lc "python - <<'PY'\n\
-import sys\n\
-print('Installing tensorflow-datasets...', flush=True)\n\
-import subprocess; subprocess.check_call([sys.executable,'-m','pip','install','-q','tensorflow-datasets'])\n\
-print('Preparing BAIR (bair_robot_pushing_small)...', flush=True)\n\
-import tensorflow_datasets as tfds\n\
-tfds.builder('bair_robot_pushing_small').download_and_prepare(data_dir='/data/tfds')\n\
-print('Done.', flush=True)\n\
-PY"
+	docker run --rm -v "$(TFDS_DIR)":/data/tfds python:3.10-slim \
+	bash -lc "pip install -q tensorflow-datasets && \
+	          python -c \"import tensorflow_datasets as tfds; \
+	                      tfds.load('$(TFDS_NAME)', data_dir='/data/tfds', split='train', download=True); \
+	                      print('Done')\""
+
 
 .PHONY : build
 build:
