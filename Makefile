@@ -1,0 +1,74 @@
+# ====== Config ======
+IMAGE        ?= rolling-bair:cu121
+TFDS_DIR     ?= $(HOME)/tensorflow_datasets
+APP_DIR      ?= $(PWD)
+
+# Training params (override on CLI as needed)
+FRAMES       ?= 16
+COND_FRAMES  ?= 1
+BATCH        ?= 8
+BASE         ?= 64
+STEPS        ?= 1000
+CKPT_EVERY   ?= 100
+
+# Sampling params
+SPLIT        ?= test
+REFINE_PASSES?= 2
+SAMPLE_OUT   ?= samples/bair_long_final_second
+CKPT         ?= checkpoints/ema_final.pt
+
+# Docker run common flags
+RUN_GPU      ?= --gpus all
+MOUNTS       ?= -v $(APP_DIR):/app -v $(TFDS_DIR):/data/tfds
+ENVVARS      ?= -e TFDS_DATA_DIR=/data/tfds -w /app
+
+
+.PHONY: tfds
+tfds:
+	@mkdir -p "$(TFDS_DIR)"
+	docker run --rm -it \
+		-v "$(TFDS_DIR)":/data/tfds \
+		tensorflow/tensorflow:2.17.0 \
+		bash -lc "python - <<'PY'\n\
+import sys\n\
+print('Installing tensorflow-datasets...', flush=True)\n\
+import subprocess; subprocess.check_call([sys.executable,'-m','pip','install','-q','tensorflow-datasets'])\n\
+print('Preparing BAIR (bair_robot_pushing_small)...', flush=True)\n\
+import tensorflow_datasets as tfds\n\
+tfds.builder('bair_robot_pushing_small').download_and_prepare(data_dir='/data/tfds')\n\
+print('Done.', flush=True)\n\
+PY"
+
+.PHONY : build
+build:
+	docker build -t $(IMAGE) .
+
+.PHONY: train
+train: build
+	docker run --rm -it $(RUN_GPU) \
+		$(MOUNTS) $(ENVVARS) $(IMAGE) \
+		uv run python train_bair_rolling.py \
+			--data-dir "$$TFDS_DATA_DIR" \
+			--save-dir "checkpoints" \
+			--frames $(FRAMES) \
+			--cond-frames $(COND_FRAMES) \
+			--mode rolling \
+			--batch $(BATCH) \
+			--base $(BASE) \
+			--fp16 \
+			--steps $(STEPS) \
+			--ckpt-every $(CKPT_EVERY)
+
+.PHONY: sample
+sample: build
+	docker run --rm -it $(RUN_GPU) \
+		$(MOUNTS) $(ENVVARS) $(IMAGE) \
+		uv run python sample_bair_rolling.py \
+			--ckpt "$(CKPT)" \
+			--out "$(SAMPLE_OUT)" \
+			--frames $(FRAMES) \
+			--cond-frames $(COND_FRAMES) \
+			--base $(BASE) \
+			--batch 4 \
+			--split $(SPLIT) \
+			--refine-passes $(REFINE_PASSES)
