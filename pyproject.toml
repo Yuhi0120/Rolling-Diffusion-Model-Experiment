@@ -1,0 +1,16 @@
+[project]
+name = "rolling-diffusion-bair"
+version = "0.1.0"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+  "einops>=0.7",
+  "tqdm>=4.66",
+  "tensorflow==2.17.*",         # CPU TF just for TFDS download/IO
+  "tensorflow-datasets>=4.9",
+  "imageio[ffmpeg]>=2.34",
+  "kornia>=0.7",
+  "scipy>=1.11",
+  "torchmetrics>=1.4",
+  "decord>=0.6",
+]
+[tool.uv]
